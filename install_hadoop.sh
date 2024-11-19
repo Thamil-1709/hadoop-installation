@@ -51,12 +51,18 @@ if ! wget -q ${HADOOP_DOWNLOAD_URL} -O /tmp/hadoop-${HADOOP_VERSION}.tar.gz; the
     echo "Failed to download Hadoop. Check your internet connection or URL."
     exit 1
 fi
-mkdir -p ${INSTALL_DIR}
+sudo mkdir -p ${INSTALL_DIR}
 echo "Extracting Hadoop..."
 if ! tar -xvzf /tmp/hadoop-${HADOOP_VERSION}.tar.gz -C ${INSTALL_DIR} --strip-components=1; then
     echo "Extraction failed. Exiting..."
     exit 1
 fi
+echo "Extracting Hadoop..."
+if ! tar -xvzf /tmp/hadoop-${HADOOP_VERSION}.tar.gz -C ${INSTALL_DIR} --strip-components=1; then
+    echo "Extraction failed. Exiting..."
+    exit 1
+fi
+
 
 # Configure environment variables
 echo "Configuring environment variables..."

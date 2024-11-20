@@ -11,9 +11,39 @@ echo "Updating system packages..."
 sudo apt-get update -y && sudo apt-get upgrade -y
 
 # Install Java
-echo "Installing Java..."
+# Update system package index
+echo "Updating system package index..."
+sudo apt-get update -y
+
+# Install Java (OpenJDK 8)
+echo "Installing OpenJDK 8..."
 sudo apt-get install -y openjdk-8-jdk
+
+# Verify Java installation
+echo "Verifying Java installation..."
 java -version
+
+# Locate Java installation path
+JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
+echo "JAVA_HOME detected as: $JAVA_HOME"
+
+# Configure environment variables
+echo "Configuring environment variables..."
+cat <<EOL | sudo tee /etc/profile.d/java.sh
+# Java environment variables
+export JAVA_HOME=$JAVA_HOME
+export PATH=\$JAVA_HOME/bin:\$PATH
+EOL
+
+# Load the environment variables
+echo "Reloading environment variables..."
+source /etc/profile.d/java.sh
+
+# Verify JAVA_HOME
+echo "Verifying JAVA_HOME..."
+echo "JAVA_HOME is set to: $JAVA_HOME"
+
+echo "Java installation and configuration completed successfully."
 
 # Create Hadoop user
 echo "Creating Hadoop user..."

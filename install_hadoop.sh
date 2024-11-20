@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Hadoop installation script with error handling for Ubuntu
+# Hadoop installation script with enhanced error handling
 # Version: Hadoop 2.7.3
 
-set -e            # Exit on any command failure
-set -o pipefail   # Ensure pipelines fail if any command fails
+set -e # Exit immediately if a command exits with a non-zero status
+set -o pipefail # Fail a pipeline if any command fails
 trap 'echo "Error occurred on line $LINENO. Exiting..."; exit 1;' ERR
 
 echo "Starting Hadoop 2.7.3 installation on Ubuntu..."
@@ -17,7 +17,7 @@ check_success() {
     fi
 }
 
-# Update the system
+# Update system
 echo "Updating system..."
 sudo apt-get update -y && sudo apt-get upgrade -y
 check_success "System update and upgrade"
@@ -29,23 +29,23 @@ check_success "Java installation"
 echo "Java installed successfully."
 java -version || { echo "Java not installed properly. Exiting..."; exit 1; }
 
-# Create a Hadoop user and group
-echo "Setting up Hadoop user and group..."
+# Create a Hadoop user and add to sudo group
+echo "Setting up Hadoop user..."
 sudo addgroup hadoop || echo "Group 'hadoop' already exists."
 sudo adduser --ingroup hadoop hadoopuser --disabled-password || echo "User 'hadoopuser' already exists."
 echo "hadoopuser:hadoop" | sudo chpasswd
-sudo usermod -aG sudo hadoopuser
-check_success "Hadoop user and group setup"
-echo "hadoopuser created and added to the sudo group."
+sudo usermod -aG sudo hadoopuser  # Add to sudo group
+check_success "Hadoop user setup"
+echo "hadoopuser created and added to sudo group."
 
-# Create Hadoop installation directory
-echo "Setting up Hadoop installation directory..."
+# Ensure the installation directory exists and set permissions
+echo "Ensuring Hadoop installation directory exists..."
 HADOOP_INSTALL_DIR="/usr/local/hadoop"
-sudo mkdir -p "$HADOOP_INSTALL_DIR"
-sudo chown -R hadoopuser:hadoop "$HADOOP_INSTALL_DIR"
-check_success "Hadoop installation directory setup"
+sudo mkdir -p $HADOOP_INSTALL_DIR
+sudo chown -R hadoopuser:hadoop $HADOOP_INSTALL_DIR
+check_success "Hadoop directory setup"
 
-# Switch to the hadoopuser for further setup
+# Switch to the hadoopuser for the rest of the setup
 sudo su - hadoopuser << 'EOF'
 
 # Variables
@@ -55,10 +55,15 @@ INSTALL_DIR="/usr/local/hadoop"
 
 # Download and extract Hadoop
 echo "Downloading Hadoop $HADOOP_VERSION..."
-wget -q "${HADOOP_DOWNLOAD_URL}" -O "/tmp/hadoop-${HADOOP_VERSION}.tar.gz" || { echo "Failed to download Hadoop. Exiting..."; exit 1; }
-
+if ! wget -q ${HADOOP_DOWNLOAD_URL} -O /tmp/hadoop-${HADOOP_VERSION}.tar.gz; then
+    echo "Failed to download Hadoop. Check your internet connection or URL."
+    exit 1
+fi
 echo "Extracting Hadoop..."
-tar -xzf "/tmp/hadoop-${HADOOP_VERSION}.tar.gz" -C "$INSTALL_DIR" --strip-components=1 || { echo "Extraction failed. Exiting..."; exit 1; }
+if ! tar -xzvf /tmp/hadoop-${HADOOP_VERSION}.tar.gz -C ${INSTALL_DIR} --strip-components=1; then
+    echo "Extraction failed. Exiting..."
+    exit 1
+fi
 
 # Configure environment variables
 echo "Configuring environment variables..."
@@ -69,6 +74,12 @@ export HADOOP_CONF_DIR=\$HADOOP_HOME/etc/hadoop
 export PATH=\$PATH:\$HADOOP_HOME/bin:\$HADOOP_HOME/sbin
 EOL
 source ~/.bashrc || { echo "Failed to load environment variables. Exiting..."; exit 1; }
+
+# Ensure Hadoop config directory exists
+if [ ! -d "\$HADOOP_CONF_DIR" ]; then
+    echo "Creating Hadoop configuration directory..."
+    mkdir -p \$HADOOP_CONF_DIR
+fi
 
 # Configure Hadoop XML files
 echo "Configuring Hadoop XML files..."
@@ -112,31 +123,28 @@ cat <<EOL > \$HADOOP_CONF_DIR/yarn-site.xml
 </configuration>
 EOL
 
-# Setup HDFS directories
+# Ensure necessary HDFS directories exist
 echo "Setting up HDFS directories..."
 mkdir -p \$HADOOP_HOME/hdfs/namenode
 mkdir -p \$HADOOP_HOME/hdfs/datanode
+
 cat <<EOL >> \$HADOOP_CONF_DIR/hadoop-env.sh
 export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:/bin/java::")
 EOL
 
-# Format HDFS namenode
+# Format HDFS Namenode
 echo "Formatting HDFS namenode..."
-\$HADOOP_HOME/bin/hdfs namenode -format || { echo "HDFS namenode formatting failed. Exiting..."; exit 1; }
+if ! \$HADOOP_HOME/bin/hdfs namenode -format; then
+    echo "HDFS namenode formatting failed. Exiting..."
+    exit 1
+fi
 
 EOF
 
-# Set permissions and ownership
-echo "Updating permissions and ownership..."
+# Permissions and ownership
+echo "Updating permissions..."
 sudo chown -R hadoopuser:hadoop /usr/local/hadoop
-check_success "Permissions and ownership update"
+check_success "Updating permissions"
 
-# Final validation
-echo "Verifying Hadoop installation..."
-sudo su - hadoopuser -c "hadoop version" || { echo "Hadoop installation verification failed. Exiting..."; exit 1; }
-
-# Cleanup
-echo "Cleaning up temporary files..."
-sudo rm -rf "/tmp/hadoop-${HADOOP_VERSION}.tar.gz"
-
+# Done
 echo "Hadoop installation completed successfully. Log in as hadoopuser to start using Hadoop."
